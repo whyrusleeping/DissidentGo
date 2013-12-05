@@ -234,10 +234,13 @@ func removeTooShort(plaintext []Text) []Text {
 			fmt.Println(string(a))
 			fmt.Println(string(b))
 			fmt.Println(string(excess))
-			p2 = append(p2, Text{excess,[][]byte{a,b}})
+			p2[len(p2)-1].sec = [][]byte{a,b}
+			p2 = append(p2, Text{excess,nil})
 			printTexts(p2)
 		}
+		break
 	}
+	p2[len(p2)-1].first = catBytes(p2[len(p2)-1].first, plaintext[len(plaintext)-1].first)
 	return p2
 }
 
