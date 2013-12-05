@@ -198,12 +198,13 @@ func (t Text) Print() {
 
 func removeTooShort(plaintext []Text) []Text {
 	p2 := []Text{Text{[]byte{}, nil}}
-	for i := 0; i < len(plaintext); i++ {
+	for i := 0; i < len(plaintext) - 1; i++ {
 		printTexts(p2)
 		printTexts(plaintext)
 		p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].first)
 
 		if len(p2) > 1 && len(p2[len(p2) - 1].sec) < 15 {
+			fmt.Println("There.")
 			p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].sec[0])
 		} else {
 			a,b := plaintext[i].sec[0], plaintext[i].sec[1]
@@ -238,7 +239,6 @@ func removeTooShort(plaintext []Text) []Text {
 			p2 = append(p2, Text{excess,nil})
 			printTexts(p2)
 		}
-		break
 	}
 	p2[len(p2)-1].first = catBytes(p2[len(p2)-1].first, plaintext[len(plaintext)-1].first)
 	return p2
@@ -255,6 +255,15 @@ func printTexts(t []Text) {
 func testRemoveTooShort() {
 	input := []Text{Text{[]byte{}, [][]byte{[]byte("abc"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
 	out := removeTooShort(input)
+	printTexts(out)
+	ninput := []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("abcd")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("dabc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("ac"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
 	printTexts(out)
 }
 
