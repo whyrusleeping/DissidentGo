@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"bytes"
 	"math/rand"
+	"time"
 )
 
 func h(b []byte) []byte {
@@ -393,6 +394,7 @@ func solve(vectors [][]byte, goal []byte) []byte {
 }
 
 func testSolve() {
+	rand.Seed(time.Now().UnixNano())
 	vectors := make([][]byte, 10)
 	for i,_ := range vectors {
 		vectors[i] = make([]byte, 5)
