@@ -6,6 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"bytes"
+	"math/rand"
 )
 
 func h(b []byte) []byte {
@@ -217,8 +218,158 @@ func removeTooShort(plaintext []Text) []Text {
 	return p2
 }
 
+func toBitfield(m []byte) []byte {
+	var r []byte
+	for _,v := range m {
+		for i := byte(0); i < 8; i++ {
+			r = append(r, (v >> i) & 1)
+		}
+	}
+	return r
+}
+
+type Message struct {
+	Key []byte
+	Mes []byte
+}
+
+func partialDecodeMessages(key, mes []byte, mylen int) []byte {
+	r := make([]byte, mylen)
+	blank := make([]byte, mylen)
+	for i := 0; i < len(mes) - 15; i++ {
+		r = x(r, encryptOfb(key, mes[i:i+16], blank))
+	}
+	return r
+}
+
+func pdms(messages []*Message, text []byte) []byte {
+	buf := new(bytes.Buffer)
+	for _,m := range messages {
+		buf.Write(partialDecodeMessages(m.Key, text, len(m.Mes)))
+	}
+	return buf.Bytes()
+}
+
+func encodeMessages(messages []*Message, plaintext []Text) []byte {
+	plaintext = removeTooShort(plaintext)
+	base := [][]byte{plaintext[0].first}
+	for i := 0; i < len(plaintext); i++ {
+		base = append(base,plaintext[i].sec[0])
+		base = append(base, plaintext[i+1].first)
+	}
+	buf := new(bytes.Buffer)
+	for _,m := range messages {
+		buf.Write(m.Mes)
+	}
+	textbuf := new(bytes.Buffer)
+	for _,v := range base {
+		textbuf.Write(v)
+	}
+	goal := toBitfield(x(buf.Bytes(),pdms(messages, textbuf.Bytes())))
+	var vectors [][]byte
+	for i := 0; i < len(plaintext)-1; i++ {
+		a := plaintext[i].first
+		a = a[len(a)-15:]
+		arg1 := catBytes(a, plaintext[i].sec[0])
+		b := plaintext[i+1].first[:15]
+		arg1 = catBytes(arg1, b)
+
+		arg2 := catBytes(a, plaintext[i].sec[1])
+		arg2 = catBytes(arg2, b)
+
+		pdm1 := pdms(messages, arg1)
+		pdm2 := pdms(messages, arg2)
+
+		vectors = append(vectors, toBitfield(x(pdm1, pdm2)))
+	}
+	toflips := solve(vectors, goal)
+	if toflips == nil {
+		return nil
+	}
+	buf = new(bytes.Buffer)
+	buf.Write(plaintext[0].first)
+	for i := 0; i < len(plaintext)-1; i++ {
+		buf.Write(plaintext[i].sec[toflips[i]])
+		buf.Write(plaintext[i+1].first)
+	}
+	return buf.Bytes()
+}
+
+func packAndEncodeMessages(messages []*Message, plaintext []Text) []byte {
+	out := make([]*Message, len(messages))
+	for i,v := range messages {
+		out[i] = &Message{v.Key, packMessage(v.Mes)}
+	}
+	return encodeMessages(out, plaintext)
+}
+
+func xor(a,b []byte) []byte{
+	ret := make([]byte, len(a))
+	for i,v := range a {
+		ret[i] = v ^ b[i]
+	}
+	return ret
+}
+
+//Im fairly certain that this is a matrix operation of some sort
+func solve(vectors [][]byte, goal []byte) []byte {
+	var active [][]byte
+	extra := make([]byte, len(vectors))
+	for i,_ := range vectors {
+		active = append(active, catBytes(vectors[i], extra))
+	}
+	for i := 0; i < len(active); i++ {
+		active[i][len(goal) + i] = 1
+	}
+	for i := 0; i < len(goal); i++ {
+		p := i
+		for ;p < len(active) && active[p][i] == 0; p++ {}
+		if p == len(vectors) {
+			return nil
+		}
+		active[p], active[i] = active[i], active[p]
+		for j := 0; j < len(active); j++ {
+			if j != i && active[j][i] != 0 {
+				active[j] = xor(active[j], active[i])
+			}
+		}
+	}
+	r := make([]byte, len(active))
+	for i := 0; i < len(goal); i++ {
+		if goal[i] != 0 {
+			r = xor(r, active[i][len(goal):])
+		}
+	}
+	return r
+}
+
+func testSolve() {
+	vectors := make([][]byte, 10)
+	for i,_ := range vectors {
+		vectors[i] = make([]byte, 5)
+		for j,_ := range vectors[i] {
+			vectors[i][j] = byte(rand.Intn(2))
+		}
+	}
+	goal := make([]byte, 5)
+	for i,_ := range goal {
+		goal[i] = byte(rand.Intn(2))
+	}
+	solution := solve(vectors,goal)
+	t := make([]byte, 5)
+	for i,_ := range solution {
+		if solution[i] != 0 {
+			t = xor(t, vectors[i])
+		}
+	}
+	if !bytes.Equal(t,goal) {
+		panic("SOLVE FAILED.")
+	}
+}
+
 func main() {
 	fmt.Println("TESTING:")
 	testPack()
+	testSolve()
 }
 
