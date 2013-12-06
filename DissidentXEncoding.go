@@ -189,33 +189,82 @@ type Text struct {
 	sec [][]byte
 }
 
+func (t Text) Print() {
+	fmt.Printf("'%s', [",string(t.first))
+	for _,v := range t.sec {
+		fmt.Printf("'%s' ", string(v))
+	}
+	fmt.Print("], ")
+}
+
 func removeTooShort(plaintext []Text) []Text {
 	p2 := []Text{Text{[]byte{}, nil}}
 	for i := 0; i < len(plaintext) - 1; i++ {
+		printTexts(p2)
+		printTexts(plaintext)
 		p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].first)
-		if len(p2) > 1 && len(p2[len(p2) - 1].first) < 15 {
+
+		if len(p2) > 1 && len(p2[len(p2) - 1].sec) < 15 {
+			fmt.Println("There.")
 			p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].sec[0])
 		} else {
 			a,b := plaintext[i].sec[0], plaintext[i].sec[1]
+			fmt.Printf("a,b:\n")
+			fmt.Println(string(a))
+			fmt.Println(string(b))
 			var j int
-			for j:= 0; j < len(a) && j < len(b) && a[j] == b[j]; j++ {}
+			for j = 0; j < len(a) && j < len(b) && a[j] == b[j]; j++ {}
 			if j > 0 {
+				fmt.Printf("j > 0! [%d]\n", j)
 				p2[len(p2) - 1].first = catBytes(p2[len(p2)-1].first, a[:j])
 				a = a[j:]
 				b = b[j:]
 			}
+			fmt.Printf("a,b: (after)\n")
+			fmt.Println(string(a))
+			fmt.Println(string(b))
 			var excess []byte
 			for j = 0; j<len(a) && j<len(b) &&
-				a[len(a)-j] == b[len(b)-j]; j++ {}
+				a[len(a)-(j+1)] == b[len(b)-(j+1)]; j++ {}
 			if j > 0 {
+				fmt.Println("Here")
 				excess = a[len(a)-j:]
 				a = a[:len(a)-j]
 				b = b[:len(b)-j]
 			}
-			p2 = append(p2, Text{excess,[][]byte{a,b}})
+			fmt.Println("a,b,(excess)")
+			fmt.Println(string(a))
+			fmt.Println(string(b))
+			fmt.Println(string(excess))
+			p2[len(p2)-1].sec = [][]byte{a,b}
+			p2 = append(p2, Text{excess,nil})
+			printTexts(p2)
 		}
 	}
+	p2[len(p2)-1].first = catBytes(p2[len(p2)-1].first, plaintext[len(plaintext)-1].first)
 	return p2
+}
+func printTexts(t []Text) {
+	fmt.Print("[")
+	for _,v := range t {
+		v.Print()
+	}
+	fmt.Println("]")
+}
+
+func testRemoveTooShort() {
+	input := []Text{Text{[]byte{}, [][]byte{[]byte("abc"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
+	out := removeTooShort(input)
+	printTexts(out)
+	ninput := []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("abcd")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("dabc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("ac"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
 }
 
 func toBitfield(m []byte) []byte {
@@ -369,7 +418,7 @@ func testSolve() {
 
 func main() {
 	fmt.Println("TESTING:")
-	testPack()
+	testRemoveTooShort()
 	testSolve()
 }
 
