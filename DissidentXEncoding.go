@@ -15,6 +15,10 @@ type Message struct {
 	Mes []byte
 }
 
+func MakeMessage(key, message string) *Message {
+	return &Message{[]byte(key), []byte(message)}
+}
+
 //A struct used to represent an option for storing information
 //in a stream of data.
 //data: the part of the original data that will not be changed
