@@ -31,6 +31,9 @@ var tabByte = []byte("\t")
 func TabCover(in []byte) []Text {
 	var ct []Text
 	for _,v := range bytes.Split(in, nlByte) {
+		if len(v) == 0 {
+			continue
+		}
 		if len(ct) > 0 {
 			ct[len(ct)-1].first = catBytes(ct[len(ct)-1].first, nlByte)
 		} else {
