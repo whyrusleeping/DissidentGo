@@ -2,7 +2,6 @@ package DissidentGo
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 )
@@ -27,7 +26,6 @@ func Encode(in io.Reader, out io.Writer, m []*Message, prep PrepFunc) {
 		prepm[i] = prepareMessage(m[i])
 	}
 	mout := packAndEncodeMessages(prepm, prep(ptext))
-	fmt.Println(mout)
 
 	_,err = out.Write(mout)
 	if err != nil {
