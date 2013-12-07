@@ -28,7 +28,7 @@ func TestEncode(t *testing.T) {
 	message := []byte("hey")
 	enc := encodeMessages([]*Message{&Message{key, message}}, plaintext)
 	if !bytes.Equal(message, partialDecodeMessage(key, enc, len(message))) {
-		panic("encode failed")
+		t.Fail()
 	}
 }
 
@@ -44,7 +44,7 @@ func TestCrypt(t *testing.T) {
 	enc := packAndEncodeMessages([]*Message{mes}, plaintext)
 	dec := decodeAndDecryptMessage(key, enc)
 	if !bytes.Equal(dec, message) {
-		panic("Encryption failed!")
+		t.Fail()
 	}
 }
 
@@ -69,7 +69,7 @@ func TestSolve(t *testing.T) {
 		}
 	}
 	if !bytes.Equal(tm,goal) {
-		panic("SOLVE FAILED.")
+		t.Fail()
 	}
 }
 
@@ -83,7 +83,7 @@ func TestEncrypt(t *testing.T) {
 	for i := 1; i < len(fullstr); i++ {
 		mystr := fullstr[:i]
 		if !bytes.Equal(mystr, decryptMessage(key, encryptMessage(key, mystr))) {
-			panic("Encryption failed!!")
+			t.Fail()
 		}
 	}
 }
@@ -97,10 +97,10 @@ func TestPack(t *testing.T) {
 		mystr := fullstr[:i]
 		packed := packMessage(mystr)
 		if beginUnpackMessage(packed) != len(packed) {
-			panic("Failed to pack!")
+			t.Fail()
 		}
 		if !bytes.Equal(unpackMessage(packed), mystr) {
-			panic("Failed to unpack!")
+			t.Fail()
 		}
 	}
 }
@@ -124,4 +124,3 @@ func TestRemoveTooShort(t *testing.T) {
 	out = removeTooShort(ninput)
 	printTexts(out)
 }
-
