@@ -8,12 +8,35 @@ import (
 	"bytes"
 )
 
+//A message to encode paired with the key to
+//encode it with
+type Message struct {
+	Key []byte
+	Mes []byte
+}
+
+//A struct used to represent an option for storing information
+//in a stream of data.
+//data: the part of the original data that will not be changed
+//bit: a set of 'alternatives' that can be swapped in order to
+//     actually embed your data into the plaintext
+//
+//This struct is always used in an array to the following effect:
+// [data] [bit:a/b] [data] [bit:a/b] [data] [nil]
+type Text struct {
+	data []byte
+	bit [][]byte
+}
+
+//returns a sha3 hash of the bytes
 func h(b []byte) []byte {
 	hash := sha3.NewKeccak256()
 	hash.Write(b)
 	return hash.Sum(nil)
 }
 
+//returns an xor of the bytes, does not require
+//arrays to be same length
 func x(m1 []byte, m2 []byte) []byte {
 	if len(m2) > len(m1) {
 		m1,m2 = m2,m1
@@ -29,7 +52,8 @@ func x(m1 []byte, m2 []byte) []byte {
 	return ret
 }
 
-func encryptAESCFB(dst, src, key, iv []byte) error {
+//Encrypt the 'src' bytes using AES OFB block encryption
+func encryptAESOFB(dst, src, key, iv []byte) error {
 	blockEncrypter, err := aes.NewCipher(key)
 	if err != nil {
 		return err
@@ -39,7 +63,7 @@ func encryptAESCFB(dst, src, key, iv []byte) error {
 	return nil
 }
 
-func decryptAESCFB(dst, src, key, iv []byte) error {
+func decryptAESOFB(dst, src, key, iv []byte) error {
 	blockEncrypter, err := aes.NewCipher(key)
 	if err != nil {
 		return err
@@ -57,13 +81,14 @@ func encryptOfb(key, iv, plaintext []byte) []byte {
 		panic("iv too short!")
 	}
 	msg := make([]byte, len(plaintext))
-	err := encryptAESCFB(msg, plaintext, key, iv)
+	err := encryptAESOFB(msg, plaintext, key, iv)
 	if err != nil {
 		panic(err)
 	}
 	return msg
 }
 
+//Concatenate two arrays of bytes
 func catBytes(a,b []byte) []byte {
 	ret := make([]byte, len(a) + len(b))
 	i := 0
@@ -78,6 +103,7 @@ func catBytes(a,b []byte) []byte {
 	return ret
 }
 
+//Encrypt some text with a key
 func encryptMessage(key, plaintext []byte) []byte {
 	mac := h(catBytes(key, plaintext))[:4]
 	iv := catBytes(mac, make([]byte, 12))
@@ -98,6 +124,8 @@ func decryptMessage(key, ciphertext []byte) []byte {
 	return nil
 }
 
+//Embed the length of a message and a 'checksum' into
+//a given message
 func packMessage(message []byte) []byte {
 	if len(message) < 4 {
 		panic("message not long enough! [len < 4]")
@@ -116,6 +144,8 @@ func packMessage(message []byte) []byte {
 	return catBytes(r, message[4:])
 }
 
+//Extract the length of the message from the given bytes
+//and verify the small checksum embedded along with it
 func beginUnpackMessage(message []byte) int {
 	var mlen int
 	var mbegin int
@@ -133,6 +163,7 @@ func beginUnpackMessage(message []byte) int {
 	return mlen + mbegin - 2
 }
 
+//Get the original message from a packed message
 func unpackMessage(message []byte) []byte {
 	var mlen int
 	var mbegin int
@@ -150,50 +181,30 @@ func unpackMessage(message []byte) []byte {
 	return catBytes(message[:4], message[mbegin + 2:])
 }
 
-func TestPack() {
-
-	fullstr := make([]byte, 256)
-	for i,_ := range(fullstr) {
-		fullstr[i] = byte(i)
-	}
-	for i := 4; i < len(fullstr); i++ {
-		mystr := fullstr[:i]
-		packed := packMessage(mystr)
-		if beginUnpackMessage(packed) != len(packed) {
-			panic("Failed to pack!")
-		}
-		if !bytes.Equal(unpackMessage(packed), mystr) {
-			panic("Failed to unpack!")
-		}
-	}
-}
-
-type Text struct {
-	first []byte
-	sec [][]byte
-}
 
 func (t Text) Print() {
-	fmt.Printf("'%s', [",string(t.first))
-	for _,v := range t.sec {
+	fmt.Printf("'%s', [",string(t.data))
+	for _,v := range t.bit {
 		fmt.Printf("'%s' ", string(v))
 	}
 	fmt.Print("], ")
 }
 
+//Reduction of input data, conserves number of bytes needed to
+//store messages
 func removeTooShort(plaintext []Text) []Text {
 	p2 := []Text{Text{[]byte{}, nil}}
 	for i := 0; i < len(plaintext) - 1; i++ {
-		p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].first)
+		p2[len(p2) - 1].data = catBytes(p2[len(p2) - 1].data, plaintext[i].data)
 
-		if len(p2) > 1 && len(p2[len(p2) - 1].first) < 15 {
-			p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].sec[0])
+		if len(p2) > 1 && len(p2[len(p2) - 1].data) < 15 {
+			p2[len(p2) - 1].data = catBytes(p2[len(p2) - 1].data, plaintext[i].bit[0])
 		} else {
-			a,b := plaintext[i].sec[0], plaintext[i].sec[1]
+			a,b := plaintext[i].bit[0], plaintext[i].bit[1]
 			var j int
 			for j = 0; j < len(a) && j < len(b) && a[j] == b[j]; j++ {}
 			if j > 0 {
-				p2[len(p2) - 1].first = catBytes(p2[len(p2)-1].first, a[:j])
+				p2[len(p2) - 1].data = catBytes(p2[len(p2)-1].data, a[:j])
 				a = a[j:]
 				b = b[j:]
 			}
@@ -205,11 +216,11 @@ func removeTooShort(plaintext []Text) []Text {
 				a = a[:len(a)-j]
 				b = b[:len(b)-j]
 			}
-			p2[len(p2)-1].sec = [][]byte{a,b}
+			p2[len(p2)-1].bit = [][]byte{a,b}
 			p2 = append(p2, Text{excess,nil})
 		}
 	}
-	p2[len(p2)-1].first = catBytes(p2[len(p2)-1].first, plaintext[len(plaintext)-1].first)
+	p2[len(p2)-1].data = catBytes(p2[len(p2)-1].data, plaintext[len(plaintext)-1].data)
 	return p2
 }
 
@@ -221,21 +232,7 @@ func printTexts(t []Text) {
 	fmt.Println("]")
 }
 
-func TestRemoveTooShort() {
-	input := []Text{Text{[]byte{}, [][]byte{[]byte("abc"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
-	out := removeTooShort(input)
-	printTexts(out)
-	ninput := []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("abcd")}}, Text{[]byte("y"), nil}}
-	out = removeTooShort(ninput)
-	printTexts(out)
-	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("dabc")}}, Text{[]byte("y"), nil}}
-	out = removeTooShort(ninput)
-	printTexts(out)
-	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("ac"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
-	out = removeTooShort(ninput)
-	printTexts(out)
-}
-
+//Easier than bit shifting... honestly.
 func toBitfield(m []byte) []byte {
 	var r []byte
 	for _,v := range m {
@@ -246,12 +243,7 @@ func toBitfield(m []byte) []byte {
 	return r
 }
 
-type Message struct {
-	Key []byte
-	Mes []byte
-}
-
-func partialDecodeMessages(key, mes []byte, mylen int) []byte {
+func partialDecodeMessage(key, mes []byte, mylen int) []byte {
 	r := make([]byte, mylen)
 	blank := make([]byte, mylen)
 	for i := 0; i < len(mes) - 15; i++ {
@@ -260,20 +252,23 @@ func partialDecodeMessages(key, mes []byte, mylen int) []byte {
 	return r
 }
 
+//Partially Decode Messages
 func pdms(messages []*Message, text []byte) []byte {
 	buf := new(bytes.Buffer)
 	for _,m := range messages {
-		buf.Write(partialDecodeMessages(m.Key, text, len(m.Mes)))
+		buf.Write(partialDecodeMessage(m.Key, text, len(m.Mes)))
 	}
 	return buf.Bytes()
 }
 
+//Encode the given messages into the plaintext and return the
+//modified text/data
 func encodeMessages(messages []*Message, plaintext []Text) []byte {
 	plaintext = removeTooShort(plaintext)
-	base := [][]byte{plaintext[0].first}
+	base := [][]byte{plaintext[0].data}
 	for i := 0; i < len(plaintext) - 1; i++ {
-		base = append(base,plaintext[i].sec[0])
-		base = append(base, plaintext[i+1].first)
+		base = append(base,plaintext[i].bit[0])
+		base = append(base, plaintext[i+1].data)
 	}
 	buf := new(bytes.Buffer)
 	for _,m := range messages {
@@ -286,18 +281,18 @@ func encodeMessages(messages []*Message, plaintext []Text) []byte {
 	goal := toBitfield(x(buf.Bytes(),pdms(messages, textbuf.Bytes())))
 	var vectors [][]byte
 	for i := 0; i < len(plaintext)-1; i++ {
-		a := plaintext[i].first
+		a := plaintext[i].data
 		if len(a) > 15 {
 			a = a[len(a)-15:]
 		}
-		arg1 := catBytes(a, plaintext[i].sec[0])
-		b := plaintext[i+1].first
+		arg1 := catBytes(a, plaintext[i].bit[0])
+		b := plaintext[i+1].data
 		if len(b) > 15 {
 			b = b[:15]
 		}
 		arg1 = catBytes(arg1, b)
 
-		arg2 := catBytes(a, plaintext[i].sec[1])
+		arg2 := catBytes(a, plaintext[i].bit[1])
 		arg2 = catBytes(arg2, b)
 
 		pdm1 := pdms(messages, arg1)
@@ -307,13 +302,14 @@ func encodeMessages(messages []*Message, plaintext []Text) []byte {
 	}
 	toflips := solve(vectors, goal)
 	if toflips == nil {
+		fmt.Println("Solve failed! (most likely not enough plaintext)")
 		return nil
 	}
 	buf = new(bytes.Buffer)
-	buf.Write(plaintext[0].first)
+	buf.Write(plaintext[0].data)
 	for i := 0; i < len(plaintext)-1; i++ {
-		buf.Write(plaintext[i].sec[toflips[i]])
-		buf.Write(plaintext[i+1].first)
+		buf.Write(plaintext[i].bit[toflips[i]])
+		buf.Write(plaintext[i+1].data)
 	}
 	return buf.Bytes()
 }
@@ -322,13 +318,13 @@ func decodeAndDecryptMessage(key []byte, message []byte) []byte {
 	key = h(key)[:16]
 	key2 := h(key)[:16]
 
-	mystr := partialDecodeMessages(key2, message, 16)
+	mystr := partialDecodeMessage(key2, message, 16)
 	mylen := beginUnpackMessage(mystr)
 
 	if mylen == -1 {
 		return nil
 	}
-	mystr = partialDecodeMessages(key2, message, mylen)
+	mystr = partialDecodeMessage(key2, message, mylen)
 	if mystr == nil {
 		return nil
 	}
@@ -347,6 +343,7 @@ func packAndEncodeMessages(messages []*Message, plaintext []Text) []byte {
 	return encodeMessages(out, plaintext)
 }
 
+//XOR of bytes (same length arrays)
 func xor(a,b []byte) []byte{
 	ret := make([]byte, len(a))
 	for i,v := range a {
@@ -356,6 +353,8 @@ func xor(a,b []byte) []byte{
 }
 
 //Im fairly certain that this is a matrix operation of some sort
+//I didnt write this code, but if you have a good insight
+//about what it is doing. please teach me!
 func solve(vectors [][]byte, goal []byte) []byte {
 	var active [][]byte
 	extra := make([]byte, len(vectors))
@@ -386,6 +385,3 @@ func solve(vectors [][]byte, goal []byte) []byte {
 	}
 	return r
 }
-
-
-

@@ -27,7 +27,7 @@ func TestEncode(t *testing.T) {
 	plaintext = append(plaintext, Text{[]byte("stuv"),nil})
 	message := []byte("hey")
 	enc := encodeMessages([]*Message{&Message{key, message}}, plaintext)
-	if !bytes.Equal(message, partialDecodeMessages(key, enc, len(message))) {
+	if !bytes.Equal(message, partialDecodeMessage(key, enc, len(message))) {
 		panic("encode failed")
 	}
 }
@@ -86,5 +86,42 @@ func TestEncrypt(t *testing.T) {
 			panic("Encryption failed!!")
 		}
 	}
+}
+
+func TestPack(t *testing.T) {
+	fullstr := make([]byte, 256)
+	for i,_ := range(fullstr) {
+		fullstr[i] = byte(i)
+	}
+	for i := 4; i < len(fullstr); i++ {
+		mystr := fullstr[:i]
+		packed := packMessage(mystr)
+		if beginUnpackMessage(packed) != len(packed) {
+			panic("Failed to pack!")
+		}
+		if !bytes.Equal(unpackMessage(packed), mystr) {
+			panic("Failed to unpack!")
+		}
+	}
+}
+
+//Expected output:
+//[b'a', [b'b', b'q'], b'cy']
+//[b'xabc', [b'', b'd'], b'y']
+//[b'x', [b'', b'd'], b'abcy']
+//[b'xa', [b'', b'q'], b'cy']
+func TestRemoveTooShort(t *testing.T) {
+	input := []Text{Text{[]byte{}, [][]byte{[]byte("abc"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
+	out := removeTooShort(input)
+	printTexts(out)
+	ninput := []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("abcd")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("abc"),[]byte("dabc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
+	ninput = []Text{Text{[]byte("x"), [][]byte{[]byte("ac"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
+	out = removeTooShort(ninput)
+	printTexts(out)
 }
 
