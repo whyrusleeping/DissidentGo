@@ -1,4 +1,4 @@
-package main
+package DissidentGo
 
 import (
 	"code.google.com/p/go.crypto/sha3"
@@ -6,8 +6,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"bytes"
-	"math/rand"
-	"time"
 )
 
 func h(b []byte) []byte {
@@ -86,9 +84,9 @@ func encryptMessage(key, plaintext []byte) []byte {
 	return catBytes(mac, encryptOfb(key, iv, plaintext))
 }
 
-func prepareMessage(key, plaintext []byte) ([]byte, []byte) {
-	key = h(key)[:16]
-	return h(key)[:16], encryptMessage(key, plaintext)
+func prepareMessage(m *Message) *Message {
+	key := h(m.Key)[:16]
+	return &Message{h(key)[:16], encryptMessage(key, m.Mes)}
 }
 
 func decryptMessage(key, ciphertext []byte) []byte {
@@ -98,21 +96,6 @@ func decryptMessage(key, ciphertext []byte) []byte {
 		return r
 	}
 	return nil
-}
-
-func testEncrypt() {
-	key := []byte("abcdabcdabcdabcd")
-
-	fullstr := make([]byte, 256)
-	for i,_ := range(fullstr) {
-		fullstr[i] = byte(i)
-	}
-	for i := 1; i < len(fullstr); i++ {
-		mystr := fullstr[:i]
-		if !bytes.Equal(mystr, decryptMessage(key, encryptMessage(key, mystr))) {
-			fmt.Println("Encryption failed!!")
-		}
-	}
 }
 
 func packMessage(message []byte) []byte {
@@ -167,7 +150,7 @@ func unpackMessage(message []byte) []byte {
 	return catBytes(message[:4], message[mbegin + 2:])
 }
 
-func testPack() {
+func TestPack() {
 
 	fullstr := make([]byte, 256)
 	for i,_ := range(fullstr) {
@@ -201,50 +184,35 @@ func (t Text) Print() {
 func removeTooShort(plaintext []Text) []Text {
 	p2 := []Text{Text{[]byte{}, nil}}
 	for i := 0; i < len(plaintext) - 1; i++ {
-		printTexts(p2)
-		printTexts(plaintext)
 		p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].first)
 
-		if len(p2) > 1 && len(p2[len(p2) - 1].sec) < 15 {
-			fmt.Println("There.")
+		if len(p2) > 1 && len(p2[len(p2) - 1].first) < 15 {
 			p2[len(p2) - 1].first = catBytes(p2[len(p2) - 1].first, plaintext[i].sec[0])
 		} else {
 			a,b := plaintext[i].sec[0], plaintext[i].sec[1]
-			fmt.Printf("a,b:\n")
-			fmt.Println(string(a))
-			fmt.Println(string(b))
 			var j int
 			for j = 0; j < len(a) && j < len(b) && a[j] == b[j]; j++ {}
 			if j > 0 {
-				fmt.Printf("j > 0! [%d]\n", j)
 				p2[len(p2) - 1].first = catBytes(p2[len(p2)-1].first, a[:j])
 				a = a[j:]
 				b = b[j:]
 			}
-			fmt.Printf("a,b: (after)\n")
-			fmt.Println(string(a))
-			fmt.Println(string(b))
 			var excess []byte
 			for j = 0; j<len(a) && j<len(b) &&
 				a[len(a)-(j+1)] == b[len(b)-(j+1)]; j++ {}
 			if j > 0 {
-				fmt.Println("Here")
 				excess = a[len(a)-j:]
 				a = a[:len(a)-j]
 				b = b[:len(b)-j]
 			}
-			fmt.Println("a,b,(excess)")
-			fmt.Println(string(a))
-			fmt.Println(string(b))
-			fmt.Println(string(excess))
 			p2[len(p2)-1].sec = [][]byte{a,b}
 			p2 = append(p2, Text{excess,nil})
-			printTexts(p2)
 		}
 	}
 	p2[len(p2)-1].first = catBytes(p2[len(p2)-1].first, plaintext[len(plaintext)-1].first)
 	return p2
 }
+
 func printTexts(t []Text) {
 	fmt.Print("[")
 	for _,v := range t {
@@ -253,7 +221,7 @@ func printTexts(t []Text) {
 	fmt.Println("]")
 }
 
-func testRemoveTooShort() {
+func TestRemoveTooShort() {
 	input := []Text{Text{[]byte{}, [][]byte{[]byte("abc"),[]byte("aqc")}}, Text{[]byte("y"), nil}}
 	out := removeTooShort(input)
 	printTexts(out)
@@ -303,7 +271,7 @@ func pdms(messages []*Message, text []byte) []byte {
 func encodeMessages(messages []*Message, plaintext []Text) []byte {
 	plaintext = removeTooShort(plaintext)
 	base := [][]byte{plaintext[0].first}
-	for i := 0; i < len(plaintext); i++ {
+	for i := 0; i < len(plaintext) - 1; i++ {
 		base = append(base,plaintext[i].sec[0])
 		base = append(base, plaintext[i+1].first)
 	}
@@ -319,9 +287,14 @@ func encodeMessages(messages []*Message, plaintext []Text) []byte {
 	var vectors [][]byte
 	for i := 0; i < len(plaintext)-1; i++ {
 		a := plaintext[i].first
-		a = a[len(a)-15:]
+		if len(a) > 15 {
+			a = a[len(a)-15:]
+		}
 		arg1 := catBytes(a, plaintext[i].sec[0])
-		b := plaintext[i+1].first[:15]
+		b := plaintext[i+1].first
+		if len(b) > 15 {
+			b = b[:15]
+		}
 		arg1 = catBytes(arg1, b)
 
 		arg2 := catBytes(a, plaintext[i].sec[1])
@@ -343,6 +316,27 @@ func encodeMessages(messages []*Message, plaintext []Text) []byte {
 		buf.Write(plaintext[i+1].first)
 	}
 	return buf.Bytes()
+}
+
+func decodeAndDecryptMessage(key []byte, message []byte) []byte {
+	key = h(key)[:16]
+	key2 := h(key)[:16]
+
+	mystr := partialDecodeMessages(key2, message, 16)
+	mylen := beginUnpackMessage(mystr)
+
+	if mylen == -1 {
+		return nil
+	}
+	mystr = partialDecodeMessages(key2, message, mylen)
+	if mystr == nil {
+		return nil
+	}
+	mystr = unpackMessage(mystr)
+	if mystr == nil {
+		return nil
+	}
+	return decryptMessage(key, mystr)
 }
 
 func packAndEncodeMessages(messages []*Message, plaintext []Text) []byte {
@@ -393,34 +387,5 @@ func solve(vectors [][]byte, goal []byte) []byte {
 	return r
 }
 
-func testSolve() {
-	rand.Seed(time.Now().UnixNano())
-	vectors := make([][]byte, 10)
-	for i,_ := range vectors {
-		vectors[i] = make([]byte, 5)
-		for j,_ := range vectors[i] {
-			vectors[i][j] = byte(rand.Intn(2))
-		}
-	}
-	goal := make([]byte, 5)
-	for i,_ := range goal {
-		goal[i] = byte(rand.Intn(2))
-	}
-	solution := solve(vectors,goal)
-	t := make([]byte, 5)
-	for i,_ := range solution {
-		if solution[i] != 0 {
-			t = xor(t, vectors[i])
-		}
-	}
-	if !bytes.Equal(t,goal) {
-		panic("SOLVE FAILED.")
-	}
-}
 
-func main() {
-	fmt.Println("TESTING:")
-	testRemoveTooShort()
-	testSolve()
-}
 
