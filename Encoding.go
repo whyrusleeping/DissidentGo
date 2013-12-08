@@ -102,27 +102,3 @@ func LineEnding(in []byte) []Text {
 	}
 	return r
 }
-
-var options = [][]byte{[]byte("didnt"),[]byte("didn't"),
-				[]byte("dont"),[]byte("don't"),
-				[]byte("shouldnt"),[]byte("shouldn't"),
-				[]byte("wouldnt"),[]byte("wouldn't"),
-				[]byte("cant"),[]byte("can't")}
-func Contractions(in []byte) []Text {
-	var r []Text
-	mark := 0
-	for i := 0; i < len(in); i++ {
-		for j := 0; j < len(options); j++ {
-			if i + len(options[j]) < len(in) &&
-					bytes.Equal(options[j], in[i:i+len(options[j])]) {
-						fmt.Println("Found match.")
-						pairn := (j / 2) * 2
-						r = append(r, Text{in[:i], [][]byte{options[pairn], options[pairn+1]}})
-						mark = i + len(options[j])
-						i = mark
-			}
-		}
-	}
-	r = append(r, Text{in[mark:], nil})
-	return r
-}
