@@ -19,10 +19,12 @@ func main() {
 			pf = dis.TabCover
 		case "comma":
 			pf = dis.OxfordComma
+		case "apos":
+			pf = dis.Contractions
 		default:
 			fmt.Println("Invalid encoding type!")
 			fmt.Println("Options are:")
-			fmt.Println("tab, comma")
+			fmt.Println("tab, comma, apos")
 			return
 	}
 	inp, err := os.Open(os.Args[1])
